@@ -1,0 +1,15 @@
+{
+  // Используем локальный TypeScript из node_modules
+  "typescript.tsdk": "node_modules/typescript/lib",
+
+  // Автоформатирование при сохранении
+  "editor.formatOnSave": true,
+
+  // Подсказки при вводе строк
+  "editor.quickSuggestions": {
+    "strings": "on"
+  },
+
+  // Указываем Prettier как основной форматтер
+  "editor.defaultFormatter": "esbenp.prettier-vscode"
+}
