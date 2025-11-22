@@ -6,6 +6,8 @@ import postgres from 'postgres';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
+
 const FormSchema = z.object({
   id: z.string(),
   customerId: z.string(),
@@ -22,8 +24,6 @@ export async function createInvoice(formData: FormData) {
 
   const date = getYekaterinburgDate();
 
-  const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
-
   await sql`
     INSERT INTO invoices (customer_id, amount, status, date)
     VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
@@ -31,4 +31,25 @@ export async function createInvoice(formData: FormData) {
 
   revalidatePath('/dashboard/invoices');
   redirect('/dashboard/invoices');
+}
+
+const UpdateInvoice = FormSchema.omit({ id: true, date: true });
+
+export async function updateInvoice(invoiceId: string, formData: FormData) {
+  const { customerId, amount, status } = getFormData(formData, UpdateInvoice);
+  const amountInCents = amount * 100;
+
+  await sql`
+    UPDATE invoices
+    SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
+    WHERE id = ${invoiceId}
+  `;
+
+  revalidatePath('/dashboard/invoices');
+  redirect('/dashboard/invoices');
+}
+
+export async function deleteInvoice(invoiceId: string) {
+  await sql`DELETE FROM invoices WHERE id = ${invoiceId}`;
+  revalidatePath('/dashboard/invoices');
 }
