@@ -6,6 +6,11 @@ import postgres from 'postgres';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+interface ReturnInvoiceActionData {
+  status: 'error' | 'success';
+  message: string;
+}
+
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 
 const FormSchema = z.object({
@@ -18,35 +23,59 @@ const FormSchema = z.object({
 
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 
-export async function createInvoice(formData: FormData) {
+export async function createInvoice(formData: FormData): Promise<ReturnInvoiceActionData> {
   const { customerId, amount, status } = getFormData(formData, CreateInvoice);
   const amountInCents = amount * 100;
 
   const date = getYekaterinburgDate();
-
-  await sql`
+  try {
+    await sql`
     INSERT INTO invoices (customer_id, amount, status, date)
     VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
   `;
+  } catch (error) {
+    console.error(error);
+    return {
+      status: 'error',
+      message: 'При создании счета произошла ошибка.',
+    };
+  }
 
   revalidatePath('/dashboard/invoices');
-  redirect('/dashboard/invoices');
+  return {
+    status: 'success',
+    message: 'Счет создан.',
+  };
 }
 
 const UpdateInvoice = FormSchema.omit({ id: true, date: true });
 
-export async function updateInvoice(invoiceId: string, formData: FormData) {
+export async function updateInvoice(
+  invoiceId: string,
+  formData: FormData,
+): Promise<ReturnInvoiceActionData> {
   const { customerId, amount, status } = getFormData(formData, UpdateInvoice);
   const amountInCents = amount * 100;
-
-  await sql`
+  try {
+    await sql`
     UPDATE invoices
     SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
     WHERE id = ${invoiceId}
   `;
+  } catch (error) {
+    console.error(error);
+    return {
+      status: 'error',
+      message: 'При изменении счета произошла ошибка.',
+    };
+  }
 
   revalidatePath('/dashboard/invoices');
-  redirect('/dashboard/invoices');
+
+  return {
+    status: 'success',
+    message: 'Счет успешно обновлен.',
+  };
 }
 
 export async function deleteInvoice(invoiceId: string) {
