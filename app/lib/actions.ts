@@ -1,6 +1,6 @@
 'use server';
 
-import z from 'zod';
+import z, { ZodError } from 'zod';
 import { getFormData, getYekaterinburgDate } from './utils';
 import postgres from 'postgres';
 import { revalidatePath } from 'next/cache';
@@ -14,29 +14,39 @@ const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 
 const FormSchema = z.object({
   id: z.string(),
-  customerId: z.string(),
-  amount: z.coerce.number(),
-  status: z.enum(['pending', 'paid']),
+  customerId: z.string({
+    invalid_type_error: 'Please select a customer.',
+  }),
+  amount: z.coerce.number().gt(0, { message: 'Please enter an amount greater than $0.' }),
+  status: z.enum(['pending', 'paid'], {
+    invalid_type_error: 'Please select an invoice status.',
+  }),
   date: z.string(),
 });
 
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 
 export async function createInvoice(formData: FormData): Promise<ReturnInvoiceActionData> {
-  const { customerId, amount, status } = getFormData(formData, CreateInvoice);
-  const amountInCents = amount * 100;
-
-  const date = getYekaterinburgDate();
   try {
+    const { customerId, amount, status } = getFormData(formData, CreateInvoice);
+    const amountInCents = amount * 100;
+
+    const date = getYekaterinburgDate();
+
     await sql`
     INSERT INTO invoices (customer_id, amount, status, date)
     VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
   `;
   } catch (error) {
     console.error(error);
+    let zodErrors: string[] = [];
+
+    if (error instanceof ZodError) {
+      zodErrors = Object.values(error)[0].map((error: { message: string }) => error.message);
+    }
     return {
       status: 'error',
-      message: 'При создании счета произошла ошибка.',
+      message: `При создании счета произошла ошибка. ${zodErrors.join(',')} `,
     };
   }
 
@@ -53,9 +63,10 @@ export async function updateInvoice(
   invoiceId: string,
   formData: FormData,
 ): Promise<ReturnInvoiceActionData> {
-  const { customerId, amount, status } = getFormData(formData, UpdateInvoice);
-  const amountInCents = amount * 100;
   try {
+    const { customerId, amount, status } = getFormData(formData, UpdateInvoice);
+    const amountInCents = amount * 100;
+
     await sql`
     UPDATE invoices
     SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
@@ -63,9 +74,15 @@ export async function updateInvoice(
   `;
   } catch (error) {
     console.error(error);
+    let zodErrors: string[] = [];
+
+    if (error instanceof ZodError) {
+      zodErrors = Object.values(error)[0].map((error: { message: string }) => error.message);
+    }
+
     return {
       status: 'error',
-      message: 'При изменении счета произошла ошибка.',
+      message: `При изменении счета произошла ошибка. ${zodErrors.join(',')}`,
     };
   }
 
