@@ -4,6 +4,8 @@ import z, { ZodError } from 'zod';
 import { getFormData, getYekaterinburgDate } from './utils';
 import postgres from 'postgres';
 import { revalidatePath } from 'next/cache';
+import { signIn } from '@/auth';
+import { AuthError } from 'next-auth';
 
 interface ReturnInvoiceActionData {
   status: 'error' | 'success';
@@ -97,4 +99,20 @@ export async function updateInvoice(
 export async function deleteInvoice(invoiceId: string) {
   await sql`DELETE FROM invoices WHERE id = ${invoiceId}`;
   revalidatePath('/dashboard/invoices');
+}
+
+export async function authenticate(prevState: string | undefined, formData: FormData) {
+  try {
+    await signIn('credentials', formData);
+  } catch (error) {
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case 'CredentialsSignin':
+          return 'Invalid credentials.';
+        default:
+          return 'Something went wrong.';
+      }
+    }
+    throw error;
+  }
 }
